@@ -65,20 +65,8 @@ object FlowControllerSpec extends TestSuite {
         Some(mockProducer)
       }
     }
-    implicit object ExceptionPickler extends Pickler[java.lang.Exception] {
-      override def pickle(obj: Exception)(implicit state: PickleState): Unit = {
-        state.pickle(obj.getMessage)
-      }
-    }
-    implicit object ExceptionUnpickler extends Unpickler[java.lang.Exception] {
-      override def unpickle(implicit state: UnpickleState): Exception = {
-        val msg = state.unpickle[String]
-        new java.lang.Exception(msg)
-      }
-    }
-    val exceptionPickler = CompositePickler[Throwable].addConcreteType[java.lang.Exception]
-    val fcA = new FlowController(streamA, null, exceptionPickler)
-    val fcB = new FlowController(streamB, mockProducerFactory, exceptionPickler)
+    val fcA = new FlowController(streamA, null)
+    val fcB = new FlowController(streamB, mockProducerFactory)
     // handle ping-pong
     transport.receiveFor(streamB)
     transport.receiveFor(streamA)

@@ -42,3 +42,6 @@ trait FlowTransport {
    */
   def sendData(id: Int, data: ByteBuffer): Unit
 }
+
+object FlowTransport {
+}

@@ -14,7 +14,7 @@ import scala.collection.mutable
  * @param exceptionPickler Special pickler for serializing any exception that may occur in the stream
  */
 class FlowController(flowTransport: FlowTransport, producerFactory: ProducerFactory,
-                     implicit val exceptionPickler: PicklerPair[Throwable]) extends FlowMessageHandler {
+                     implicit val exceptionPickler: PicklerPair[Throwable] = ExceptionPickler.base) extends FlowMessageHandler {
 
   import FlowController._
 
@@ -109,7 +109,7 @@ class FlowController(flowTransport: FlowTransport, producerFactory: ProducerFact
     isEstablished = false
 
     // close all flows
-    inFlows.values.foreach(_.subscriberProxy.onComplete())
+    inFlows.values.foreach(_.subscriberProxy.onError(new FlowDisconnected))
     outFlows.values.foreach(_.subscriptionProxy.foreach(_.cancel()))
 
     inFlows.clear()
@@ -188,15 +188,16 @@ class FlowController(flowTransport: FlowTransport, producerFactory: ProducerFact
 }
 
 object FlowController {
+  class FlowDisconnected extends Exception
 
   /**
    * Messages sent over the control flow
    */
   protected sealed trait ControlMessage
 
-  case object Ping extends ControlMessage
+  protected case object Ping extends ControlMessage
 
-  case object Pong extends ControlMessage
+  protected case object Pong extends ControlMessage
 
   /**
    * Messages related to incoming flows
@@ -274,7 +275,7 @@ object FlowController {
    * @param flowController FlowController to pickle exceptions and provide the control flow
    * @tparam T Type of messages
    */
-  protected case class OutFlow[T <: AnyRef](id: Int, pickler: Pickler[T], initRequest: Long, flowController: FlowController) {
+  protected case class OutFlow[T <: AnyRef](id: Int, pickler: Pickler[T], initRequest: Long, flowController: FlowController)(implicit exceptionPickler: PicklerPair[Throwable]) {
     var subscriptionProxy = Option.empty[SubscriptionProxy]
     var isOpen = false
     // a subscriber proxy given to the Provider which will redirect calls over the flow
@@ -290,7 +291,6 @@ object FlowController {
       override def onError(t: Throwable): Unit = {
         if (isOpen) {
           isOpen = false
-          implicit def errorPickler = flowController.exceptionPickler
           val errorData = Pickle.intoBytes(t)
           flowController.controlFlow.send(FlowError(id, errorData))
         }
